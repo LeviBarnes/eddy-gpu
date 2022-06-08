@@ -814,6 +814,13 @@ int main(int argc, char *argv[]) {
       construct_resampling_indices(n_resamplings, samples, prop_resampling, resampled_indices_C1);
       construct_resampling_indices(n_resamplings, samples2, prop_resampling, resampled_indices_C2);
 
+      //Copy randomness to GPU
+      short* d_resample_C1, *d_resample_C2;
+      cudaMalloc(&d_resample_C1, sizeof(short)*n_resamplings);
+      cudaMalloc(&d_resample_C2, sizeof(short)*n_resamplings);
+      cudaMemcpy(d_resample_C1, resampled_indices_C1, sizeof(short)*n_resamplings, cudaMemcpyHostToDevice);
+      cudaMemcpy(d_resample_C2, resampled_indices_C2, sizeof(short)*n_resamplings, cudaMemcpyHostToDevice);
+
 
       cudaEventRecord(start, 0);
       // printf("c = %d\n", c);
@@ -825,10 +832,11 @@ int main(int argc, char *argv[]) {
         //     dstf, dout23, c, dpriorMatrix, alphaEdgePrior, alphaEdge,
         //     flag_pAdjust);
 
-        determineEdges_resampled<<<n_resamplings, c>>>(resampled_indices_C1, resampled_indices_C2,
+        determineEdges_resampled<<<n_resamplings, c, genes * genes * sizeof(int)>>>(d_resample_C1, d_resample_C2,
                                  genes, samples, samples2, dtriA, dtriAb, dpriorMatrix, 
                                  alphaEdgePrior, alphaEdge, flag_pAdjust,
                                  dppn, dstf, dspacr, dff, ddofout, c, dout23);
+        HANDLE_ERROR(cudaDeviceSynchronize());
       } else {
         int BPN = ceil((c * 1.0) / MAX_THREADS);
         int TPB = ceil((c * 1.0) / BPN);
@@ -840,6 +848,7 @@ int main(int argc, char *argv[]) {
             dstf, dout23, c, dpriorMatrix, alphaEdgePrior, alphaEdge,
             flag_pAdjust, BPN, TPB);
         printf("run2Scalable completed\n");
+        HANDLE_ERROR(cudaDeviceSynchronize());
       }
 
       printf ("AFTER RUN2\n");
